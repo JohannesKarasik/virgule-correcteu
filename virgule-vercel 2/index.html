@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="fr">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body>
+<title>Virgule Correcteur</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Literata:opsz,wght@7..72,400;7..72,600&family=Figtree:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: brand masthead, then editor (left) + suggestions rail (right); stacks on phones. */
+:root{
+  --paper:#f4f6f9; --surface:#ffffff; --ink:#1a2030; --muted:#5b6476; --line:#dde1ea;
+  --ins:#2546d1; --rem:#c4352b; --chg:#a5620a; --ok:#1d7a52;
+  --display:"Young Serif", Georgia, serif;
+  --text:"Literata", Georgia, "Times New Roman", serif;
+  --ui:"Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#11141b; --surface:#181c26; --ink:#e6e9f0; --muted:#98a0b3; --line:#2a3040;
+  --ins:#8199ff; --rem:#ff7b6f; --chg:#f0b25a; --ok:#5fd19c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#11141b; --surface:#181c26; --ink:#e6e9f0; --muted:#98a0b3; --line:#2a3040;
+  --ins:#8199ff; --rem:#ff7b6f; --chg:#f0b25a; --ok:#5fd19c; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:15px;line-height:1.5;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:28px 48px}
+.wrap{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+
+header{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:2px;font-family:var(--display);font-size:clamp(34px,6vw,48px);line-height:1;letter-spacing:-.01em}
+.brand .comma{color:var(--ins);font-size:1.5em;line-height:0;transform:translateY(.08em);display:inline-block}
+.tag{color:var(--muted);font-size:15px;padding-bottom:6px}
+
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line)}
+.status{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--muted);margin-right:auto}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.status[data-s="ai"] .dot{background:var(--ok)}
+.status[data-s="busy"] .dot{background:var(--ins);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){.status .dot{animation:none!important}}
+
+button{font:inherit;font-weight:600;font-size:14px;border-radius:8px;padding:7px 12px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+button:hover{border-color:var(--muted)}
+button:focus-visible,textarea:focus-visible{outline:2px solid var(--ins);outline-offset:2px}
+button.primary{background:var(--ins);border-color:var(--ins);color:var(--surface)}
+button.ghostbtn{border-color:transparent;background:transparent;color:var(--muted);font-weight:500}
+button:disabled{opacity:.45;cursor:default}
+
+.editor{position:relative;padding:0}
+.backdrop,textarea{font-family:var(--text);font-size:17px;line-height:1.75;padding:20px 22px;margin:0;border:0;
+  white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;letter-spacing:0;tab-size:4}
+.backdrop{position:absolute;inset:0;color:transparent;pointer-events:none;overflow:hidden}
+textarea{position:relative;display:block;width:100%;min-height:340px;resize:none;overflow:hidden;background:transparent;color:var(--ink);caret-color:var(--ink);border-radius:0 0 12px 12px}
+.m{background:none;color:transparent;border-radius:3px}
+.m.ins{text-decoration:underline 2px var(--ins);text-underline-offset:5px}
+.m.ins.on{background:color-mix(in srgb,var(--ins) 14%,transparent)}
+.m.rem{background:color-mix(in srgb,var(--rem) 20%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--rem) 20%,transparent)}
+.m.rem.on{background:color-mix(in srgb,var(--rem) 38%,transparent);box-shadow:0 0 0 3px color-mix(in srgb,var(--rem) 38%,transparent)}
+.m.other{text-decoration:underline 2px var(--chg);text-underline-offset:5px}
+.m.other.on{background:color-mix(in srgb,var(--chg) 18%,transparent)}
+.chip.other{color:var(--chg);background:color-mix(in srgb,var(--chg) 14%,transparent)}
+.progress{height:3px;position:relative;overflow:hidden;background:color-mix(in srgb,var(--ins) 14%,transparent)}
+.progress::after{content:"";position:absolute;inset:0 auto 0 0;width:35%;background:var(--ins);border-radius:2px;animation:slide 1.2s ease-in-out infinite}
+@keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}
+.is-busy textarea{opacity:.55;transition:opacity .2s}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;margin-right:7px;vertical-align:-1px;animation:rot .7s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.skel{padding:14px;display:flex;flex-direction:column;gap:10px}
+.skel i{display:block;height:10px;border-radius:5px;background:linear-gradient(90deg,var(--line) 0%,color-mix(in srgb,var(--line) 40%,var(--surface)) 50%,var(--line) 100%);background-size:200% 100%;animation:shim 1.3s linear infinite}
+@keyframes shim{to{background-position:-200% 0}}
+.busy-msg{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ins);font-weight:600}
+@media (prefers-reduced-motion:reduce){.progress::after,.spin,.skel i{animation-duration:3s}}
+.foot{display:flex;justify-content:space-between;gap:10px;padding:10px 14px;border-top:1px solid var(--line);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+.pop{position:absolute;z-index:5;width:min(320px,calc(100% - 16px));background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  box-shadow:0 10px 30px color-mix(in srgb,var(--ink) 18%,transparent);padding:14px;display:flex;flex-direction:column;gap:10px}
+.chip{align-self:flex-start;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:99px}
+.chip.ins{color:var(--ins);background:color-mix(in srgb,var(--ins) 12%,transparent)}
+.chip.rem{color:var(--rem);background:color-mix(in srgb,var(--rem) 12%,transparent)}
+.ctx{font-family:var(--text);font-size:15px;line-height:1.5}
+.ctx b{font-weight:600;padding:0 1px;border-radius:2px}
+.ctx b.ins{color:var(--ins);background:color-mix(in srgb,var(--ins) 14%,transparent)}
+.ctx b.rem{color:var(--rem);text-decoration:line-through;background:color-mix(in srgb,var(--rem) 14%,transparent)}
+.why{font-size:14px;color:var(--muted)}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+
+aside{display:flex;flex-direction:column;gap:12px}
+.rail-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.rail-head h2{font-family:var(--display);font-weight:400;font-size:22px;margin:0}
+.counts{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.list{display:flex;flex-direction:column;gap:10px}
+.item{padding:14px;display:flex;flex-direction:column;gap:8px;cursor:pointer;border-left-width:1px}
+.item:hover,.item.on{border-color:var(--muted)}
+.rule{font-size:13px;font-weight:600}
+.empty{padding:22px 16px;text-align:center;color:var(--muted)}
+.empty strong{display:block;color:var(--ok);font-size:15px;margin-bottom:4px}
+.note{font-size:12.5px;color:var(--muted);line-height:1.45}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="brand">Virgule<span class="comma" aria-hidden="true">,</span></div>
+    <div class="tag">Le correcteur de virgules pour le français</div>
+  </header>
+
+  <div class="grid">
+    <section class="card" id="editorCard">
+      <div class="toolbar">
+        <span class="status" id="status" data-s="local"><span class="dot"></span><span id="statusText">Analyse…</span></span>
+        <button class="ghostbtn" id="sampleBtn" type="button">Exemple</button>
+        <button class="ghostbtn" id="clearBtn" type="button">Effacer</button>
+        <button id="copyBtn" type="button">Copier</button>
+        <button id="allBtn" type="button" hidden>Tout accepter</button>
+        <button class="primary" id="checkBtn" type="button">Vérifier</button>
+      </div>
+      <div class="progress" id="progress" hidden></div>
+      <div class="editor" id="editor">
+        <div class="backdrop" id="backdrop" aria-hidden="true"></div>
+        <textarea id="text" spellcheck="false" lang="fr" aria-label="Votre texte" placeholder="Collez ou tapez votre texte en français…"></textarea>
+        <div class="pop" id="pop" hidden role="dialog" aria-label="Suggestion"></div>
+      </div>
+      <div class="foot"><span id="chars">0 caractère</span><span>Cliquez sur un mot souligné pour voir la suggestion</span></div>
+    </section>
+
+    <aside>
+      <div class="rail-head"><h2>Suggestions</h2><span class="counts" id="counts"></span></div>
+      <div class="list" id="list"></div>
+      <p class="note" id="note" hidden>Mode hors ligne : seules les règles de base sont appliquées. Connectez /api/check pour l’analyse complète.</p>
+    </aside>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const ta = $('#text'), bd = $('#backdrop'), list = $('#list'), pop = $('#pop'), editor = $('#editor');
+
+const SAMPLE = "Cependant nous avons décidé de reporter la réunion car plusieurs collègues sont absents cette semaine. Oui je sais que c’est frustrant mais nous n’avons pas vraiment le choix.\n\nPour le buffet, nous avons acheté des pommes, des poires, et des oranges. Par ailleurs le compte rendu sera envoyé demain c’est-à-dire avant la date limite. Pensez à apporter des stylos, du papier etc.";
+
+// mode: null (unknown) | 'api' (/api/check) | 'claude' (artifact viewer) | 'local' (basic rules)
+let busy = false, lastError = null, blocked = null;
+function setBusy(on) {
+  busy = on;
+  $('#checkBtn').innerHTML = on ? '<span class="spin"></span>Analyse…' : 'Vérifier';
+  $('#progress').hidden = !on;
+  $('#editorCard').classList.toggle('is-busy', on);
+  if (on) { sugs = []; closePop(); render(); }
+}
+let sugs = [], ignored = new Set(), seq = 0, mode = null, activeId = null, timer = null, lastChecked = null, sampleFn;
+
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const wordStart = (t, i) => { let k = i; while (k > 0 && !/\s/.test(t[k-1])) k--; return k; };
+
+/* ---------- Same prompt + diff as api/check.js ---------- */
+const SYSTEM = `Tu es un correcteur spécialisé dans la ponctuation française.
+Réécris le texte de l'utilisateur en version PARFAITE du point de vue des virgules : ajoute les virgules manquantes et supprime les virgules fautives.
+
+Contraintes strictes :
+- Ne modifie AUCUN autre caractère : ni orthographe, ni accents, ni apostrophes, ni majuscules, ni espaces, ni sauts de ligne, ni autre ponctuation.
+- Une virgule ajoutée se colle au mot précédent (« mot, mot »).
+- Si une virgule est facultative ou purement stylistique, ne change rien.
+
+Règles principales :
+- Virgule après un connecteur ou un complément circonstanciel en tête de phrase (Cependant, Par ailleurs, Hier soir, Quand il est arrivé…).
+- Virgule avant mais, car, c'est-à-dire, etc.
+- Virgules pour isoler une apposition, une incise, une relative explicative, une apostrophe (« Merci, Marie »).
+- Virgule entre les éléments d'une énumération, mais pas avant le « et »/« ou » final.
+- Jamais de virgule entre le sujet et le verbe, entre le verbe et son complément d'objet, ni avant une complétive en « que ».
+
+Réponds uniquement en JSON :
+{"corrected":"<texte complet corrigé>","changes":[{"type":"insert"|"remove","near":"<3 à 5 mots du texte corrigé autour du changement>","rule":"<nom court de la règle>","explanation":"<une phrase claire en français>"}]}
+Liste les changements dans leur ordre d'apparition.`;
+
+/* ---------- Diff: original vs corrected → edits on the original ---------- */
+const tokenize = s => s.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*|\s+|./gsu) || [];
+
+function myers(a, b, maxD = 600) {
+  const n = a.length, m = b.length, max = n + m, off = max + 1;
+  const V = new Int32Array(2 * max + 2); const trace = [];
+  for (let d = 0; d <= Math.min(max, maxD); d++) {
+    trace.push(V.slice());
+    for (let k = -d; k <= d; k += 2) {
+      let x = (k === -d || (k !== d && V[off + k - 1] < V[off + k + 1])) ? V[off + k + 1] : V[off + k - 1] + 1;
+      let y = x - k;
+      while (x < n && y < m && a[x] === b[y]) { x++; y++; }
+      V[off + k] = x;
+      if (x >= n && y >= m) return backtrack(trace, n, m, off);
+    }
+  }
+  return null; // texts too different
+}
+function backtrack(trace, n, m, off) {
+  let x = n, y = m; const ops = [];
+  for (let d = trace.length - 1; d >= 0; d--) {
+    const V = trace[d], k = x - y;
+    const pk = (k === -d || (k !== d && V[off + k - 1] < V[off + k + 1])) ? k + 1 : k - 1;
+    const px = V[off + pk], py = px - pk;
+    while (x > px && y > py) { ops.push({ op: '=', a: x - 1, b: y - 1 }); x--; y--; }
+    if (d > 0) ops.push(x === px ? { op: '+', a: x, b: y - 1 } : { op: '-', a: x - 1 });
+    x = px; y = py;
+  }
+  return ops.reverse();
+}
+
+const strip = s => s.replace(/[,\s]/g, '');
+const commas = s => (s.match(/,/g) || []).length;
+
+function diffEdits(orig, corr) {
+  const A = tokenize(orig), B = tokenize(corr);
+  const pos = [0]; for (const t of A) pos.push(pos[pos.length - 1] + t.length);
+  const ops = myers(A, B); if (!ops) return null;
+  const edits = []; let cur = null;
+  const flush = () => {
+    if (!cur) return;
+    const original = orig.slice(cur.start, cur.end), replacement = cur.ins.join('');
+    if (!(/^\s*$/.test(original) && /^\s*$/.test(replacement))) {   // skip whitespace-only noise
+      const type = strip(original) === strip(replacement)
+        ? (commas(replacement) > commas(original) ? 'ins' : 'rem') : 'other';
+      edits.push({ start: cur.start, end: cur.end, original, replacement, type });
+    }
+    cur = null;
+  };
+  for (const o of ops) {
+    if (o.op === '=') { flush(); continue; }
+    if (!cur) cur = { start: pos[o.a], end: pos[o.a], ins: [] };
+    if (o.op === '-') cur.end = pos[o.a + 1]; else cur.ins.push(B[o.b]);
+  }
+  flush();
+  return edits;
+}
+
+function attachReasons(edits, changes) {
+  const pool = (Array.isArray(changes) ? changes : []).map(c => ({ ...c, used: false }));
+  return edits.map(e => {
+    const want = e.type === 'ins' ? 'insert' : e.type === 'rem' ? 'remove' : null;
+    const c = want && pool.find(p => !p.used && p.type === want); if (c) c.used = true;
+    return { ...e,
+      rule: (c && c.rule) || (e.type === 'ins' ? 'Virgule attendue' : e.type === 'rem' ? 'Virgule superflue' : 'Modification'),
+      why: (c && c.explanation) || (e.type === 'ins' ? 'Une virgule est attendue à cet endroit.' : e.type === 'rem' ? 'Cette virgule n’a pas lieu d’être ici.' : 'Le texte corrigé diffère à cet endroit.') };
+  });
+}
+
+
+
+/* ---------- Basic offline rules (last resort) ---------- */
+const INTRO = ["Tout d['’]abord","D['’]abord","Cependant","Pourtant","Toutefois","Néanmoins","Ensuite","Enfin","Finalement","Par ailleurs","En effet","De plus","En outre","Ainsi","Bref","Par conséquent","En revanche","Au contraire","Malheureusement","Heureusement","Évidemment","Bien sûr","Par exemple","En conclusion","En résumé","D['’]ailleurs","Certes","En fait","Autrement dit","De ce fait","Dans ce cas","Personnellement","Or"];
+const START = "(^|[.!?…]\\s+|\\n\\s*)";
+const R_INTRO = new RegExp(START + "(" + INTRO.join("|") + ")(?=\\s+(?!que\\b|qu['’])[^\\s,;:.!?])", "gu");
+const R_YESNO = new RegExp(START + "(Oui|Non|Bon|Eh bien)(?=\\s+(?!seulement\\b|plus\\b)[^\\s,;:.!?])", "gu");
+const R_MID = /([^\s,;:(«—.!?…-])(\s+)(mais|car|c['’]est-à-dire|etc)(?=[\s.,;:!?)»]|$)/giu;
+const WHY = {
+  intro: ["Connecteur en début de phrase", "Un connecteur placé en tête de phrase (« Cependant », « Par ailleurs »…) est suivi d’une virgule."],
+  yesno: ["Interjection en début de phrase", "« Oui », « non » ou « bon » en tête de phrase se détachent par une virgule."],
+  mais:  ["Virgule avant « mais »", "On met une virgule avant « mais » lorsqu’il relie deux propositions."],
+  car:   ["Virgule avant « car »", "« Car » introduit une justification ; il est précédé d’une virgule."],
+  cad:   ["Virgule avant « c’est-à-dire »", "« C’est-à-dire » introduit une explication et se détache par une virgule."],
+  etc:   ["Virgule avant « etc. »", "« Etc. » est toujours précédé d’une virgule."],
+  list:  ["Dernier élément d’une énumération", "On ne met pas de virgule avant le « et » ou le « ou » qui clôt une énumération."]
+};
+const ins = (i, k) => ({ start: i, end: i, original: '', replacement: ',', type: 'ins', rule: WHY[k][0], why: WHY[k][1] });
+function localRules(t) {
+  const out = [];
+  for (const m of t.matchAll(R_INTRO)) out.push(ins(m.index + m[1].length + m[2].length, 'intro'));
+  for (const m of t.matchAll(R_YESNO)) out.push(ins(m.index + m[1].length + m[2].length, 'yesno'));
+  for (const m of t.matchAll(R_MID)) {
+    const w = m[3].toLowerCase(), i = m.index + 1;
+    if (w === 'mais' && /^\s+(aussi|encore|également)\b/i.test(t.slice(m.index + m[0].length))) continue;
+    if (w === 'car') { const p = t.slice(0, i).match(/(\S+)$/); if (p && /^(le|un|du|au|ce|en|son|mon|ton|leur)$/i.test(p[1])) continue; }
+    out.push(ins(i, w === 'mais' ? 'mais' : w === 'car' ? 'car' : w === 'etc' ? 'etc' : 'cad'));
+  }
+  for (const m of t.matchAll(/,(\s+)(et|ou)\s+/gu)) {
+    const i = m.index, s = Math.max(t.lastIndexOf('.', i), t.lastIndexOf('!', i), t.lastIndexOf('?', i), t.lastIndexOf('\n', i)) + 1;
+    if (!t.slice(s, i).includes(',')) continue;
+    const after = t.slice(i + m[0].length), tail = after.slice(0, after.search(/[.!?;\n]|$/));
+    if (tail.includes(',') || tail.trim().split(/\s+/).length > 4) continue;
+    out.push({ start: i, end: i + 1, original: ',', replacement: '', type: 'rem', rule: WHY.list[0], why: WHY.list[1] });
+  }
+  const seen = new Set();
+  return out.filter(s => !seen.has(s.start) && seen.add(s.start));
+}
+
+/* ---------- Getting the corrected text ---------- */
+async function viaApi(t) {
+  const r = await fetch('/api/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: t }) });
+  if (!r.ok) throw new Error('api ' + r.status);
+  const j = await r.json();
+  if (!Array.isArray(j.edits)) throw new Error('api shape');
+  return j.edits.filter(e => t.slice(e.start, e.end) === e.original);
+}
+const CLAUDE_FORMAT = `Réponds EXACTEMENT dans ce format, sans rien d'autre :
+<corrige>
+(le texte complet corrigé, identique à l'original sauf les virgules)
+</corrige>
+Puis une ligne JSON par changement, dans l'ordre :
+{"type":"insert","near":"mots autour","rule":"nom court de la règle","explanation":"une phrase en français"}
+Utilise "type":"remove" pour une virgule supprimée. S'il n'y a aucun changement, renvoie le texte tel quel et aucune ligne JSON.`;
+let ctl = null;
+async function viaClaude(t) {
+  ctl = new AbortController();
+  const rules = SYSTEM.split('Réponds uniquement en JSON')[0];
+  const { text } = await sampleFn(rules + CLAUDE_FORMAT + "\n\nTexte à corriger :\n<texte>\n" + t + "\n</texte>", { effort: 'low', signal: ctl.signal });
+  const m = text.match(/<corrige>\r?\n?([\s\S]*?)\r?\n?<\/corrige>/);
+  if (!m) throw { code: 'bad_format' };
+  const corrected = m[1].replace(/\r\n/g, '\n');
+  const changes = text.slice(m.index + m[0].length).split('\n').map(l => { try { return JSON.parse(l.trim()); } catch { return null; } }).filter(Boolean);
+  const edits = diffEdits(t, corrected);
+  if (!edits) throw { code: 'too_different' };
+  return attachReasons(edits, changes);
+}
+async function getSample() {
+  if (sampleFn !== undefined) return sampleFn;
+  try { sampleFn = window.claude ? await window.claude.use('sample') : null; } catch { sampleFn = null; }
+  return sampleFn;
+}
+
+const keyOf = (t, s) => s.type + '|' + s.replacement + '|' + t.slice(Math.max(0, s.start - 20), s.end + 20);
+function setStatus(s, msg) {
+  $('#status').dataset.s = s;
+  $('#statusText').textContent = msg;
+  $('#note').hidden = true;
+}
+
+async function check() {
+  if (ctl) { ctl.abort(); ctl = null; }
+  const t = ta.value, my = ++seq;
+  if (!t.trim()) { sugs = []; lastChecked = t; render(); setStatus('ai', 'Prêt'); return; }
+  setStatus('busy', 'Analyse en cours…'); setBusy(true);
+  let edits = null, failed = null;
+  if (mode === null || mode === 'api') {
+    try { edits = await viaApi(t); mode = 'api'; } catch { if (mode === null) mode = 'try-claude'; }
+  }
+  if (!edits && (mode === 'try-claude' || mode === 'claude')) {
+    const fn = await getSample();
+    if (fn) {
+      try { edits = await viaClaude(t); mode = 'claude'; blocked = null; }
+      catch (e) {
+        if (['not_granted', 'sampling_disabled', 'not_declared', 'capability_disabled'].includes(e && e.code)) { mode = 'try-claude'; blocked = e.code; }
+        else if (e && e.code === 'cancelled') return;
+        else { mode = 'claude'; failed = (e && e.code) || 'erreur'; }
+      }
+    } else { mode = 'try-claude'; blocked = 'unavailable'; }
+  }
+  if (my !== seq) return;
+  setBusy(false);
+  if (ta.value !== t) { render(); return; }
+  if (!edits) edits = localRules(t);
+  sugs = edits.filter(s => !ignored.has(keyOf(t, s))).map((s, n) => ({ ...s, id: 's' + my + '_' + n }));
+  lastChecked = t; lastError = failed;
+  setStatus(failed || blocked ? 'local' : 'ai',
+    blocked ? 'Claude n’est pas autorisé' : failed ? `Analyse complète impossible (${failed})` : sugs.length ? 'Analyse terminée' : 'Aucune faute de virgule');
+  render();
+}
+
+/* ---------- Rendering ---------- */
+const LABEL = { ins: 'Virgule manquante', rem: 'Virgule en trop', other: 'Modification' };
+function autosize() { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
+function render() {
+  const t = ta.value; let html = '', pos = 0;
+  for (const s of [...sugs].sort((a, b) => a.start - b.start)) {
+    const on = s.id === activeId ? ' on' : '';
+    if (s.start === s.end) {                       // pure insertion: underline the word before, ghost the new text
+      const ws = wordStart(t, s.start); if (ws < pos) continue;
+      html += esc(t.slice(pos, ws)) + `<mark class="m ${s.type === 'other' ? 'other' : 'ins'}${on}" data-id="${s.id}">${esc(t.slice(ws, s.start))}</mark>`;
+      pos = s.start;
+    } else {                                       // removal or replacement: highlight the original span
+      if (s.start < pos) continue;
+      html += esc(t.slice(pos, s.start)) + `<mark class="m ${s.type === 'ins' ? 'other' : s.type}${on}" data-id="${s.id}">${esc(t.slice(s.start, s.end))}</mark>`;
+      pos = s.end;
+    }
+  }
+  html += esc(t.slice(pos)); if (t === '' || t.endsWith('\n')) html += ' ';
+  bd.innerHTML = html;
+  renderList(); autosize();
+  const n = t.length; $('#chars').textContent = n.toLocaleString('fr-FR') + (n > 1 ? ' caractères' : ' caractère');
+}
+function context(t, s) {
+  let a = t.slice(Math.max(0, s.start - 32), s.start), b = t.slice(s.end, s.end + 32);
+  if (s.start > 32) a = '…' + a.replace(/^\S*\s/, ''); if (s.end + 32 < t.length) b = b.replace(/\s\S*$/, '') + '…';
+  const mid = (s.original ? `<b class="rem">${esc(s.original)}</b>` : '') + (s.replacement ? `<b class="ins">${esc(s.replacement)}</b>` : '');
+  return (esc(a) + mid + esc(b)).replace(/\n/g, ' ');
+}
+function renderList() {
+  const t = ta.value;
+  $('#allBtn').hidden = busy || sugs.length < 2;
+  const n = { ins: 0, rem: 0, other: 0 }; sugs.forEach(s => n[s.type]++);
+  $('#counts').textContent = [n.ins && `${n.ins} manquante${n.ins > 1 ? 's' : ''}`, n.rem && `${n.rem} en trop`, n.other && `${n.other} autre${n.other > 1 ? 's' : ''}`].filter(Boolean).join(' · ');
+  if (busy) {
+    const sk = w => `<div class="card skel"><i style="width:38%"></i><i style="width:${w}%"></i><i style="width:${w - 25}%"></i></div>`;
+    list.innerHTML = `<div class="busy-msg"><span class="spin"></span>Vérification en cours…</div>` + sk(92) + sk(80) + sk(88)
+      + `<p class="note">Cela peut prendre jusqu’à 30 secondes.</p>`;
+    return;
+  }
+  const allow = blocked ? `<div class="card empty" style="text-align:left;padding:14px;display:flex;flex-direction:column;gap:10px">
+      <strong style="color:var(--rem);margin:0">Analyse complète désactivée</strong>
+      <span>Cette page a besoin de votre accord pour utiliser Claude. Sans lui, seules quelques règles de base sont vérifiées.</span>
+      <button type="button" class="primary" data-act="perm" style="align-self:flex-start">Autoriser Claude</button>
+      <span id="permMsg" class="note" hidden></span></div>` : '';
+  if (blocked && !sugs.length) { list.innerHTML = allow; return; }
+  if (!sugs.length) {
+    const stale = t.trim() && t !== lastChecked;
+    list.innerHTML = `<div class="card empty">${stale ? '<strong style="color:var(--ink)">Texte modifié</strong>Cliquez sur Vérifier pour analyser ce texte.' : `<strong>Tout est en ordre</strong>${t.trim() ? 'Aucune virgule à revoir dans ce texte.' : 'Tapez ou collez un texte pour commencer.'}`}</div>`;
+    return;
+  }
+  const warn = lastError ? `<div class="card empty" style="padding:12px 14px;text-align:left">L’analyse complète a échoué. Résultats des règles de base ci-dessous. Cliquez sur Vérifier pour réessayer.</div>` : '';
+  list.innerHTML = allow + warn + [...sugs].sort((a, b) => a.start - b.start).map(s => `
+    <div class="card item${s.id === activeId ? ' on' : ''}" data-id="${s.id}">
+      <span class="chip ${s.type}">${LABEL[s.type]}</span>
+      <div class="ctx">${context(t, s)}</div>
+      <div class="rule">${esc(s.rule || '')}</div>
+      <div class="actions">
+        <button type="button" data-act="accept" data-id="${s.id}">${s.type === 'ins' ? 'Ajouter' : s.type === 'rem' ? 'Retirer' : 'Appliquer'}</button>
+        <button type="button" class="ghostbtn" data-act="ignore" data-id="${s.id}">Ignorer</button>
+      </div>
+    </div>`).join('');
+}
+function highlight(id) {
+  activeId = id;
+  bd.querySelectorAll('.m').forEach(m => m.classList.toggle('on', m.dataset.id === id));
+  list.querySelectorAll('.item').forEach(m => m.classList.toggle('on', m.dataset.id === id));
+}
+
+/* ---------- Popover ---------- */
+function openPop(id) {
+  const s = sugs.find(x => x.id === id); if (!s) return closePop();
+  highlight(id);
+  const mark = bd.querySelector(`[data-id="${id}"]`); if (!mark) return;
+  pop.innerHTML = `<span class="chip ${s.type}">${LABEL[s.type]}</span>
+    <div class="ctx">${context(ta.value, s)}</div>
+    <div class="why">${esc(s.why || '')}</div>
+    <div class="actions">
+      <button type="button" class="primary" data-act="accept" data-id="${id}">${s.type === 'ins' ? 'Ajouter la virgule' : s.type === 'rem' ? 'Retirer la virgule' : 'Appliquer'}</button>
+      <button type="button" class="ghostbtn" data-act="ignore" data-id="${id}">Ignorer</button>
+    </div>`;
+  pop.hidden = false;
+  const er = editor.getBoundingClientRect(), mr = mark.getBoundingClientRect();
+  pop.style.left = Math.min(Math.max(8, mr.left - er.left - 12), er.width - pop.offsetWidth - 8) + 'px';
+  pop.style.top = (mr.bottom - er.top + 10) + 'px';
+}
+function closePop() { pop.hidden = true; highlight(null); }
+
+/* ---------- Applying edits ---------- */
+const apply = (s, t) => t.slice(0, s.start) + s.replacement + t.slice(s.end);
+function accept(id) {
+  const s = sugs.find(x => x.id === id); if (!s) return;
+  const d = s.replacement.length - (s.end - s.start);
+  ta.value = apply(s, ta.value);
+  sugs = sugs.filter(x => x !== s).map(x => x.start >= s.end ? { ...x, start: x.start + d, end: x.end + d } : x);
+  lastChecked = ta.value; closePop(); render();
+}
+function ignore(id) {
+  const s = sugs.find(x => x.id === id); if (!s) return;
+  ignored.add(keyOf(ta.value, s)); sugs = sugs.filter(x => x !== s); closePop(); render();
+}
+function acceptAll() {
+  if (busy || !sugs.length) return;
+  let t = ta.value; for (const s of [...sugs].sort((a, b) => b.start - a.start)) t = apply(s, t);
+  ta.value = t; sugs = []; lastChecked = t; closePop(); render();
+  setStatus($('#status').dataset.s, 'Toutes les virgules ont été corrigées');
+}
+
+async function allowClaude() {
+  const msg = () => document.getElementById('permMsg');
+  try {
+    const perms = window.claude && await window.claude.use('permissions');
+    if (!perms) throw 0;
+    await perms.manage();
+    const st = await perms.state('sample');
+    if (st === 'granted' || st === 'prompt') { blocked = null; check(); }
+    else if (msg()) { msg().hidden = false; msg().textContent = 'Claude est toujours refusé. Rechargez la page après l’avoir autorisé.'; }
+  } catch {
+    if (msg()) { msg().hidden = false; msg().textContent = 'Ouvrez le menu Permissions de cet artifact (en haut de la page), autorisez « Use Claude », puis rechargez la page.'; }
+  }
+}
+
+/* ---------- Events ---------- */
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (b && b.dataset.act === 'perm') { allowClaude(); return; }
+  if (b) { (b.dataset.act === 'accept' ? accept : ignore)(b.dataset.id); return; }
+  const item = e.target.closest('.item');
+  if (item) { openPop(item.dataset.id); bd.querySelector(`[data-id="${item.dataset.id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+  if (!e.target.closest('#pop') && e.target !== ta) closePop();
+});
+list.addEventListener('mouseover', e => { const it = e.target.closest('.item'); if (it && pop.hidden) highlight(it.dataset.id); });
+list.addEventListener('mouseleave', () => { if (pop.hidden) highlight(null); });
+ta.addEventListener('click', () => {
+  const c = ta.selectionStart; if (ta.selectionEnd !== c) return closePop();
+  const t = ta.value;
+  const s = sugs.find(s => s.start === s.end ? (c >= wordStart(t, s.start) && c <= s.start + 1) : (c >= s.start && c <= s.end));
+  s ? openPop(s.id) : closePop();
+});
+ta.addEventListener('input', () => {
+  if (ctl) { ctl.abort(); ctl = null; seq++; setBusy(false); }
+  sugs = []; closePop(); render(); clearTimeout(timer);
+  // The API and local rules are cheap: re-check as you type. Claude-in-viewer runs on "Vérifier".
+  if (mode === 'api') timer = setTimeout(check, 1100);
+  else if (!busy) setStatus('local', 'Texte modifié');
+});
+ta.addEventListener('paste', () => setTimeout(() => { if (mode !== 'api') check(); }, 0));
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closePop();
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') check();
+});
+window.addEventListener('resize', () => { autosize(); closePop(); });
+
+$('#checkBtn').onclick = () => check();
+$('#allBtn').onclick = acceptAll;
+$('#sampleBtn').onclick = () => { ta.value = SAMPLE; ignored.clear(); check(); };
+$('#clearBtn').onclick = () => { ta.value = ''; sugs = []; lastChecked = ''; closePop(); render(); ta.focus(); };
+$('#copyBtn').onclick = async () => {
+  const b = $('#copyBtn');
+  try { await navigator.clipboard.writeText(ta.value); b.textContent = 'Copié'; }
+  catch { ta.select(); b.textContent = 'Sélectionné'; }
+  setTimeout(() => b.textContent = 'Copier', 1500);
+};
+
+ta.value = SAMPLE;
+sugs = localRules(SAMPLE).map((s, n) => ({ ...s, id: 'init_' + n })); lastChecked = SAMPLE;
+render(); setStatus('ai', 'Prêt');
+document.fonts && document.fonts.ready.then(render);
+</script>
+</body>
+</html>
